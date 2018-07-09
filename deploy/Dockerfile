@@ -7,3 +7,14 @@ RUN apt-get update && \
         curl \
         lftp \
         rsync
+
+RUN apt-get install -y \
+    python3 \
+    python3-pip
+
+COPY deployer/deployer /usr/local/bin/deployer
+COPY deployer/requirements.txt .
+
+RUN pip3 install -r requirements.txt
+RUN rm requirements.txt
+
