@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+
+import fnmatch
+
+from cement.core.foundation import CementApp
+from cement.ext.ext_argparse import ArgparseController, expose
+from fabric import Connection
+import uuid
+import tarfile
+import glob
+import os
+import time
+import sys
+
+from invoke import UnexpectedExit
+
+
+def okay():
+    print("Done.\n")
+
+
+class ScpDeployController(ArgparseController):
+
+    exclude_filename_patterns = []
+
+    def default(self):
+        self.app.args.print_help()
+
+    @expose(
+        arguments=[
+            (['source'], {'help': 'Source (on local machine)'}),
+            (['destination'], {'help': 'Destination (on remote machine)'}),
+            (['--host'], {'help': 'SSH Host'}),
+            (['--user', '-u'], {'help': 'SSH User'}),
+            (['--port', '-p'], {'help': 'SSH Port', 'default': '22'}),
+            (['--password'], {'help': 'SSH Password. SSH Key used by default.'}),
+            (['--exclude-from'], {'help': 'Path to a text file listing all files and directories to exclude. Use one  '
+                                          'Unix shell-style wildcard per line'}),
+            (['--temp-dir'], {'help': 'The path of the directory used for uploading files to'}),
+            (['--no-delete'], {'action': 'store_true', 'help': 'Do not delete the existing destination dir. Rename it '
+                                                               'instead by appending a timestamp.'}),
+        ],
+        help='<Deploy via scp>')
+    def deploy(self):
+        if self.app.pargs.host is None or self.app.pargs.user is None:
+            self.app.log.error('You have to provide HOST and USER')
+            app.close(code=1)
+            sys.exit(1)
+
+        if self.app.pargs.temp_dir is None:
+            self.app.pargs.temp_dir = self.app.pargs.destination + '_deployer_temp'
+
+        if self.app.pargs.password is None:
+            kwargs = None
+        else:
+            kwargs = {"password": self.app.pargs.password}
+
+        archive_uuid = str(uuid.uuid4())
+        timestamp = str(int(time.time()))
+        archive_dir = 'archive/' + archive_uuid
+        archive_path = archive_dir + '/deployer_project.tar'
+        archive_destination_path = self.app.pargs.destination + '/deployer_' + archive_uuid + '.tar'
+        project_storage_dir = self.app.pargs.destination + '_old_' + timestamp
+        deployer_lock_path = self.app.pargs.destination + '/deployer.lock'
+        deployer_temp_lock_path = self.app.pargs.temp_dir + '/deployer.lock'
+
+        print("Parsing %s to exclude files from deployment" % self.app.pargs.exclude_from)
+        if self.app.pargs.exclude_from is not None:
+            with open(self.app.pargs.exclude_from, "r") as file:
+                self.exclude_filename_patterns = [line.rstrip('\n') for line in file]
+                for line in self.exclude_filename_patterns:
+                    print("   %s" % line)
+            okay()
+
+        print("Compressing files to %s..." % archive_path)
+        os.makedirs(archive_dir)
+        tar = tarfile.open(archive_path, "w:gz")
+        for file_name in glob.glob(os.path.join(self.app.pargs.source, "*")):
+                tar.add(name=file_name, arcname=os.path.basename(file_name), exclude=self.is_file_excluded)
+        tar.close()
+        okay()
+
+        print("Trying to connect to %s@%s:%s" % (self.app.pargs.user, self.app.pargs.host, self.app.pargs.port))
+        connection = Connection(host=self.app.pargs.host, user=self.app.pargs.user, port=self.app.pargs.port,
+                                connect_kwargs=kwargs)
+        connection.open()
+        if connection.is_connected:
+            okay()
+        else:
+            self.app.log.error('Failed to connect.')
+            app.close(code=1)
+            sys.exit(1)
+
+        try:
+            connection.run('test -d ' + self.app.pargs.destination)
+        except UnexpectedExit:
+            print("%s does not exist. Try creating it." % self.app.pargs.destination)
+            try:
+                connection.run('mkdir -p ' + self.app.pargs.destination)
+            except UnexpectedExit:
+                print("Not able to create %s" % self.app.pargs.destination)
+                app.close(code=1)
+                sys.exit(1)
+            okay()
+        print("Trying to allocate lock")
+        try:
+            connection.run('test -f ' + self.app.pargs.destination + '/deployer.lock')
+            self.app.log.error(
+                "%s already exists. There might be another instance of deployer running." % deployer_lock_path)
+            app.close(code=1)
+            sys.exit(1)
+
+        except UnexpectedExit:
+            connection.run('touch ' + deployer_lock_path)
+            print("Created %s" % deployer_lock_path)
+            okay()
+
+        try:
+            print("Uploading %s to %s@%s:%s:%s..." % (
+                archive_path, self.app.pargs.user, self.app.pargs.host, self.app.pargs.port, archive_destination_path))
+            connection.put(archive_path, remote=archive_destination_path)
+            okay()
+            print("Creating temp dir %s" % self.app.pargs.temp_dir)
+            connection.run('mkdir -p ' + self.app.pargs.temp_dir)
+            okay()
+            print("Untar uploaded archive %s to %s" % (archive_destination_path, self.app.pargs.temp_dir))
+            connection.run('tar xfv ' + archive_destination_path + ' -C ' + self.app.pargs.temp_dir)
+            okay()
+            print("Trying to allocate lock in %s" % deployer_temp_lock_path)
+            connection.run('touch ' + deployer_temp_lock_path)
+            okay()
+            print("Deleting uploaded archive %s" % archive_destination_path)
+            connection.run('rm ' + archive_destination_path)
+            okay()
+            print("Renaming %s to %s" % (self.app.pargs.destination, project_storage_dir))
+            connection.run('mv ' + self.app.pargs.destination + ' ' + project_storage_dir)
+            okay()
+            print("Renaming %s to %s" % (self.app.pargs.temp_dir, self.app.pargs.destination))
+            connection.run('mv ' + self.app.pargs.temp_dir + ' ' + self.app.pargs.destination)
+            okay()
+            if not self.app.pargs.no_delete:
+                print("Deleting old project in directory %s" % project_storage_dir)
+                connection.run('rm -rf ' + project_storage_dir)
+                okay()
+            print("Deployment successful! \n")
+        finally:
+            print("Freeing lock %s" % deployer_lock_path)
+            connection.run('rm ' + deployer_lock_path)
+            okay()
+            print("Removing local archive %s" % archive_dir)
+            os.remove(archive_path)
+            os.rmdir(archive_dir)
+            okay()
+
+    def is_file_excluded(self, file_name):
+        if self.app.pargs.exclude_from is not None and \
+                any(fnmatch.fnmatch(file_name, pattern) for pattern in self.exclude_filename_patterns):
+            print("  Excluding %s" % file_name)
+            return True
+        else:
+            return False
+
+
+class MyApp(CementApp):
+    class Meta:
+        label = 'deployer'
+        handlers = [ScpDeployController]
+
+
+with MyApp() as app:
+    app.run()
