@@ -21,6 +21,17 @@ Image used for deploying projects to remote servers.
 Baseimage: debian:stretch
 
 Additional Containment:
-- ssh
+- openssh-client
 - rsync
 - lftp
+- wget
+- curl
+- deployer
+
+_Usage of deployer:_
+
+Help:
+deployer deploy -h
+
+Example:
+deployer deploy --host 127.0.0.1 --port 22 --user root --exclude-from excludes.txt . /var/www
