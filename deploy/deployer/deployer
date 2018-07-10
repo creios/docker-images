@@ -195,11 +195,12 @@ class ScpDeployController(ArgparseController):
             sys.exit(1)
 
     def is_file_excluded(self, file_name):
-        if any(fnmatch.fnmatch(file_name, pattern) for pattern in self.exclude_filename_patterns):
-            print("  Excluding %s" % file_name)
+        relative_file_name = str.replace(file_name, self.source + '/', '')
+        if any(fnmatch.fnmatch(relative_file_name, pattern) for pattern in self.exclude_filename_patterns):
+            print("  Excluding %s" % relative_file_name)
             return True
         else:
-            print("  Adding %s" % file_name)
+            print("  Adding %s" % relative_file_name)
             return False
 
 
