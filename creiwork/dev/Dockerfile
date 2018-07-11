@@ -1,5 +1,8 @@
 FROM php:7.2-fpm-stretch
 
+# SETTING ENVIRONMENT
+ENV ENVIRONMENT docker
+
 RUN apt-get update
 
 # INSTALL PHP EXTENSION DEPENDENCIES
