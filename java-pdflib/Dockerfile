@@ -1,6 +1,7 @@
 FROM java:8-jdk
 
-MAINTAINER Tim Tegeler <tegeler@creios.net>
+RUN apt-get -y update && \
+        apt-get -y install imagemagick
 
 ## PDFLib
 RUN apt-get -qq install -y wget \
