@@ -8,6 +8,12 @@ RUN apt-get update && \
         lftp \
         rsync
 
+RUN apt-get install -y php
+
+RUN curl -LO https://deployer.org/deployer.phar && \
+	mv deployer.phar /usr/local/bin/dep && \
+	chmod +x /usr/local/bin/dep
+
 RUN apt-get install -y \
     python3 \
     python3-pip
