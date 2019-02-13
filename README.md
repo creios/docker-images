@@ -1,4 +1,4 @@
- 
+
 # Our Fabulous Docker Images
 
 # creiwork
@@ -13,7 +13,7 @@ Baseimage: php:7.2-fpm-stretch
 Additional Containment:
  - Xdebug
  - PHP Extensions: pdo_mysql, gmp, intl
- 
+
 # deployment
 Image used for deploying projects to remote servers.
 
@@ -26,7 +26,8 @@ Additional Containment:
 - lftp
 - wget
 - curl
-- deployer
+- deployer (custom python script)
+- deployer/dep (from deployer.org)
 
 _Usage of deployer:_
 
