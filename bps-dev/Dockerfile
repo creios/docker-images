@@ -20,6 +20,11 @@ RUN apt-get -qq update && \
         pkg-config\
         libgpgme11-dev
 
+## Composer
+COPY install-composer.sh .
+RUN ./install-composer.sh && \
+    rm install-composer.sh
+
 RUN docker-php-ext-install calendar
 RUN docker-php-ext-install gd
 RUN docker-php-ext-install curl
