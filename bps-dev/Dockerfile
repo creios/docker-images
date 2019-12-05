@@ -41,3 +41,9 @@ RUN wget --no-verbose -O /tmp/pdflib.tar.gz "https://www.pdflib.com/binaries/PDF
     tar -zxf /tmp/pdflib.tar.gz -C /tmp "PDFlib-9.1.2p1-Linux-x86_64-php/bind/php/php-720-nts/php_pdflib.so" && \
     mv "/tmp/PDFlib-9.1.2p1-Linux-x86_64-php/bind/php/php-720-nts/php_pdflib.so" "$(php -r 'echo ini_get("extension_dir");')/" && \
     rm -rf "/tmp/PDFlib-9.1.2p1-Linux-x86_64-php"
+
+RUN echo extension=php_pdflib.so > /usr/local/etc/php/conf.d/docker-php-ext.ini
+RUN echo extension=imagick.so >> /usr/local/etc/php/conf.d/docker-php-ext.ini
+RUN echo extension=gender.so >> /usr/local/etc/php/conf.d/docker-php-ext.ini
+RUN echo extension=gnupg.so >> /usr/local/etc/php/conf.d/docker-php-ext.ini
+
